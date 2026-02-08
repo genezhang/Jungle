@@ -612,12 +612,12 @@ Status LogMgr::setSN(const Record& rec) {
     // seqnum should start from 1.
     if ( rec.seqNum == 0 ) return Status::INVALID_SEQNUM;
 
-#if FAST_PATH_OPTIMIZATION
     // Fast path optimization for common writes:
     // Skip the heavy writeMutex when:
     //   1. Sequence number is not specified by user (auto-assigned)
     //   2. Sequence number overwrite is disabled
     //   3. Current log file is valid and has capacity
+    //   4. Concurrent writes are allowed
     //
     // Thread safety is guaranteed by:
     //   - Sequence number assignment uses atomic CAS in MemTable::assignSeqNum()
@@ -627,7 +627,8 @@ Status LogMgr::setSN(const Record& rec) {
     //
     // This optimization provides ~50-100% write throughput improvement
     // for multi-threaded workloads.
-    if ( !valid_number(rec.seqNum) &&
+    if ( getDbConfig()->allowConcurrentWrites &&
+         !valid_number(rec.seqNum) &&
          !getDbConfig()->allowOverwriteSeqNum ) {
         // Get current log file without lock (atomic read from manifest)
         LogFileInfo* lf_info = nullptr;
@@ -650,7 +651,6 @@ Status LogMgr::setSN(const Record& rec) {
             }
         }
     }
-#endif
 
     // Slow path: Need mutex for log file management (new file creation, overwrite, etc.)
     std::unique_lock<std::recursive_mutex> wm(writeMutex);
