@@ -9,10 +9,15 @@ option(CODE_COVERAGE "Enable Coverage" OFF)
 option(ADDRESS_SANITIZER "Enable address sanitizer" OFF)
 option(THREAD_SANITIZER "Enable thread sanitizer" OFF)
 option(LEAK_SANITIZER "Enable leak sanitizer" OFF)
+option(FAST_PATH_OPTIMIZATION "Enable fast path optimization in LogMgr::setSN" OFF)
 option(BUILD_EXAMPLES "Build examples" ON)
 option(DETACH_LOGGER "Build libsimplelogger.a" ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+if(FAST_PATH_OPTIMIZATION)
+    add_definitions(-DFAST_PATH_OPTIMIZATION)
+endif()
 
 # === Build type (default: RelWithDebInfo, O2) ===========
 if(NOT CMAKE_BUILD_TYPE)

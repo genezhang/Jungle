@@ -612,6 +612,7 @@ Status LogMgr::setSN(const Record& rec) {
     // seqnum should start from 1.
     if ( rec.seqNum == 0 ) return Status::INVALID_SEQNUM;
 
+#if FAST_PATH_OPTIMIZATION
     // Fast path optimization for common writes:
     // Skip the heavy writeMutex when:
     //   1. Sequence number is not specified by user (auto-assigned)
@@ -635,18 +636,21 @@ Status LogMgr::setSN(const Record& rec) {
             lf_info = mani->getLogFileInfoP(max_log_file_num);
         }
         
-        // Fast path: if log file is valid and writable, write directly
-        if (lf_info && !lf_info->isRemoved() && lf_info->file->isValidToWrite()) {
+        // Fast path: if log file exists, take guard and check validity
+        if (lf_info) {
             LogFileInfoGuard g_li(lf_info);
-            s = g_li->file->setSN(rec);
-            if (s) {
-                numSetRecords.fetch_add(1);
-                execBackPressure(tt.getUs());
-                return Status();
+            if (!g_li->isRemoved() && g_li->file->isValidToWrite()) {
+                s = g_li->file->setSN(rec);
+                if (s) {
+                    numSetRecords.fetch_add(1);
+                    execBackPressure(tt.getUs());
+                    return Status();
+                }
+                // Fast path failed (e.g., file became full), fall through to slow path
             }
-            // Fast path failed (e.g., file became full), fall through to slow path
         }
     }
+#endif
 
     // Slow path: Need mutex for log file management (new file creation, overwrite, etc.)
     std::unique_lock<std::recursive_mutex> wm(writeMutex);
